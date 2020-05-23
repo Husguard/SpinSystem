@@ -1,9 +1,10 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using ServiceStack.Text;
 
 namespace SpinSystem
 {
@@ -11,83 +12,63 @@ namespace SpinSystem
     {
         static void Main(string[] args)
         {
-            int multiplier = 8;
             StreamWriter gnuplot = InitGnuplot(@"C:\Program Files\gnuplot\bin");
             List<SpinSystem> systems = new List<SpinSystem>();
-            int replicCount = 4;
-            for (int i = 0; i < replicCount; i++)
+            for (int i = 0; i < 4; i++)
             {
-                systems.Add(new SpinSystem(1, 100));
+                systems.Add(new SpinSystem(1, 600));
             }
-            MonteCarlo(systems,2000000, multiplier);
+            MonteCarlo(systems,2000000);
             gnuplot.WriteLine("plot \"Capacity.txt\" using 1:2 with lines\n");
             Console.ReadLine();
         }
-        static public void MonteCarlo(List<SpinSystem> systems, int NumberOfTries, int multiplier)
+        static public void MonteCarlo(List<SpinSystem> systems, int NumberOfTries)
         {
-            Animation data = InitData(systems[0].Length, multiplier);
+            Animation data = InitData(systems[0].Length);
             Random random = new Random();
-            double TempStep = 0.1;
+            double TempStep = 0.4;
             string path = "Capacity.txt";
             StreamWriter stream = new StreamWriter(path);
-            double[] AverageEnergy = new double[systems.Count];
-            double[] AverageSquareEnergy = new double[systems.Count];
             for (double TempCounter = 0.001; TempCounter < 5; TempCounter += TempStep)
             {
-                for (int i = 0; i < systems.Count; i++)
+                List<double> AverageEnergy = new List<double>() { 0, 0, 0, 0 };
+                List<double> AverageSquareEnergy = new List<double>() { 0, 0, 0, 0 };
+                for (int i = 0; i < 4; i++)
                 {
                     systems[i].SetTemp(TempCounter + (0.1 * i));
+               //     data.ExportToData(systems[i].spins);
                 }
                 
-                for (int n = 0; n <= NumberOfTries; n++) // Ð½ÑƒÐ¶Ð½Ð¾ Ñ‡Ñ‚Ð¾Ð±Ñ‹ ÐºÐ°Ð¶Ð´Ñ‹Ð¹ Ð¿Ð¾Ñ‚Ð¾Ðº Ð´ÐµÐ»Ð°Ð» number Ð¸Ñ‚ÐµÑ€Ð°Ñ†Ð¸Ð¹
+                for (int n = 0; n <= NumberOfTries; n++) // íóæíî ÷òîáû êàæäûé ïîòîê äåëàë number èòåðàöèé
                 {
-                    for (int i = 0; i < systems.Count; i++)
+                    for (int i = 0; i < 4; i++)
                     {
                         int EnergyNow = systems[i].SwapSpin();
-                        AverageEnergy[i] += (EnergyNow); // Ð¿Ð»Ð°Ð²Ð°ÑŽÑ‰ÐµÐµ ÑÑ€ÐµÐ´Ð½ÐµÐµ Ð½ÑƒÐ¶Ð½Ð¾
-                        AverageSquareEnergy[i] += (EnergyNow * EnergyNow);
-                        if ((n % (NumberOfTries / multiplier)) == 0)
-                        {
-                //            data.ExportToData(systems[i].spins);
-                        }
+                        AverageEnergy[i] += EnergyNow / NumberOfTries; // íåïðàâèëüíûå ðàñ÷åòû?
+                        AverageSquareEnergy[i] += EnergyNow * EnergyNow / NumberOfTries;
+                        if ((n % 1000000) == 0) data.ExportToData(systems[i].spins);
                     }
-                    if ((n % 200000) == 0)
+                    if ((n % 100000) == 0)
                     {
-                        for (int i = systems.Count - 1; i > 0; i--)
+                        for (int i = 0; i <= 2; i++)
                         {
-                            if (1 < CheckSwap(systems[i], systems[i - 1]))
+                        //    Console.WriteLine("{0}", CheckSwap(systems[i], systems[i - 1]));
+                            if (random.NextDouble() < CheckSwap(systems[i], systems[i + 1])) // checkswap áîëüøèå çíà÷åíèÿ
                             {
                                 Spin[,] tmp;
                                 tmp = systems[i].spins;
-                                systems[i].spins = systems[i - 1].spins;
-                                systems[i - 1].spins = tmp;
-                                //         Console.WriteLine("Swapped {0} and {1}", i, i - 1);
+                                systems[i].spins = systems[i + 1].spins;
+                                systems[i + 1].spins = tmp;
+                        //        Console.WriteLine("Swapped {0} and {1}", i, i + 1);
                             }
                         }
                     }
                 }
-                /*
-                   for (int i = 0; i < replicCount; i++)
-                   {
-                       int EnergyNow = systems[i].SwapSpin();
-                       AverageEnergy[i] += (EnergyNow / (NumberOfTries)); // Ð¿Ð»Ð°Ð²Ð°ÑŽÑ‰ÐµÐµ ÑÑ€ÐµÐ´Ð½ÐµÐµ Ð½ÑƒÐ¶Ð½Ð¾
-                       AverageSquareEnergy[i] += (EnergyNow * EnergyNow) / (NumberOfTries);
-                       if ((n % 5000) == 0) data.ExportToData(systems[i].spins);
-                   }
-                   */
-
-                for (int i = 0; i < systems.Count; i++)
-                {
-                    AverageEnergy[i] /= (NumberOfTries);
-                    AverageSquareEnergy[i] /= (NumberOfTries*NumberOfTries);
-                }
-                int selected = 3;
-              //      Console.WriteLine("{0} : {1}", systems[0].Temp, systems[0].OldEnergy);
-                   double result = (CalculateHeatCapacity(systems[selected], AverageEnergy[selected], AverageSquareEnergy[selected]));
-                   Console.WriteLine("Temp = {0} : Capacity = {1} : Energy = {2}", Math.Round(systems[selected].Temp, 2).ToString().Replace(',', '.'), Math.Round(result / 1000000, 2).ToString().Replace(',', '.'), systems[selected].OldEnergy);
-                   stream.Write("{0} {1}\n", Math.Round(systems[selected].Temp, 2).ToString().Replace(',', '.'), Math.Round(result/1000000, 2).ToString().Replace(',', '.'));
+                Console.WriteLine("{0} : {1}", systems[0].Temp, systems[0].OldEnergy);
+                //      double result = (CalculateHeatCapacity(systems[3], AverageEnergy[3], AverageSquareEnergy[3]));
+                //     Console.WriteLine("{0} : {1}", systems[3].Temp, result);
+                //   stream.Write("{0} {1}\n", systems[3].Temp.ToString().Insert(TempCounter.ToString().Length, ".000000"), Math.Round(result, 6).ToString().Replace(',', '.'));
             }
-            Console.WriteLine("In file1");
             data.ExportToFile();
             stream.Flush();
             stream.Close();
@@ -95,12 +76,12 @@ namespace SpinSystem
         static public double CheckSwap(SpinSystem first, SpinSystem second)
         {
             double test = (first.OldEnergy - second.OldEnergy) * ((1 / first.Temp) - (1 / second.Temp));
-            return Math.Pow(Math.E, test);
+            return Math.Pow(1,test);
         }
-        static public Animation InitData(int length, int multiplier)
+        static public Animation InitData(int length)
         {
             Animation export = new Animation();
-            export.Frames = 50 * (multiplier+1);
+            export.Frames = 150;
             export.Width = length;
             export.Height = length;
             export.Data = new List<List<List<byte>>>();
@@ -195,26 +176,29 @@ namespace SpinSystem
         {
             return (this.Length + obj) % this.Length;
         }
-        // Ñ‚Ð°Ðº Ðº ÑÐ²ÐµÐ´ÐµÐ½Ð¸ÑŽ - Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸ ÑÐ¾Ñ…Ñ€Ð°Ð½ÐµÐ½Ð¸Ñ Ð·Ð°Ð²ÑÐ·Ð°Ð½Ñ‹ Ð½Ð° Ð³Ð»Ð°Ð²Ð½Ð¾Ð¼ ÐºÐ»Ð°ÑÑÐµ, Ñ‡Ñ‚Ð¾ Ð½ÐµÐ²ÐµÑ€Ð½Ð¾
+        // òàê ê ñâåäåíèþ - îïåðàöèè ñîõðàíåíèÿ çàâÿçàíû íà ãëàâíîì êëàññå, ÷òî íåâåðíî
         public int SwapSpin()
         {
             Random random = new Random();
-            int i, j, RotatedSpin;
+            int i, j, RotatedSpin, SumEnergy = 0;
             i = random.Next(0, this.Length);
             j = random.Next(0, this.Length);
             RotatedSpin = this.spins[i, j].GetSpin();
+            //  EnergyBefore = Neighbours(i, j);
             this.spins[i, j].SetSpin(-RotatedSpin);
             this.NewEnergy = this.OldEnergy + 2 * this.J.GetSpin() * this.Neighbours(i, j);
             double dE = (this.NewEnergy - this.OldEnergy) / this.Temp;
             if (random.NextDouble() > Math.Pow(Math.E, dE))
             {
                 spins[i, j].SetSpin(RotatedSpin);
+                SumEnergy += OldEnergy;
             }
             else
             {
+                SumEnergy += NewEnergy;
                 OldEnergy = NewEnergy;
             }
-            return OldEnergy;
+            return SumEnergy;
         }
     }
 }
